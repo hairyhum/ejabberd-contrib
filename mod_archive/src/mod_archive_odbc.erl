@@ -207,9 +207,9 @@ stop(Host) ->
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
 init([Host, Opts]) ->
-    IQDisc = gen_mod:get_opt(iqdisc, Opts, one_queue),
-    SessionDuration = gen_mod:get_opt(session_duration, Opts, 1800),
-    WipeOutInterval = gen_mod:get_opt(wipeout_interval, Opts, 86400),
+    IQDisc = gen_mod:get_opt(iqdisc, Opts, fun(T) -> T end, one_queue),
+    SessionDuration = gen_mod:get_opt(session_duration, Opts, fun(T) -> T end, 1800),
+    WipeOutInterval = gen_mod:get_opt(wipeout_interval, Opts, fun(T) -> T end, 86400),
     ejabberd_hooks:add(remove_user, Host, ?MODULE, remove_user, 50),
     gen_iq_handler:add_iq_handler(ejabberd_sm, Host, ?NS_ARCHIVE, ?MODULE, process_iq, IQDisc),
     gen_iq_handler:add_iq_handler(ejabberd_local, Host, ?NS_ARCHIVE, ?MODULE, process_local_iq, IQDisc),
