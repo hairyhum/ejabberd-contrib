@@ -812,7 +812,7 @@ broadcast_iq(#jid{luser = User, lserver = Server}, IQ) ->
 		  ejabberd_router:route(
                     jlib:make_jid("", Server, ""),
                     jlib:make_jid(User, Server, Resource),
-                    jlib:iq_to_xml(IQ#iq{id=<<"push">>}))
+                    jlib:iq_to_xml(IQ#iq{id = <<"push">>}))
 	  end,
     lists:foreach(Fun, ejabberd_sm:get_user_resources(User,Server)).
 
@@ -1114,7 +1114,7 @@ process_remove_interval(LUser, LServer, LResource, Start, End, With) ->
 		     end],
 		TS = get_timestamp(),
 		LJID = jlib:jid_tolower(jlib:make_jid(LUser, LServer, LResource)),
-		case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(T) -> T end, "")) of
+		case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8); (T) -> T end, "")) of
 		    %% MySQL has severe limitations for triggers: they cannot update the same table
 		    %% they're invoked for, so we have to do that here.
 		    %% However, yet another limitation is that in UPDATE MySQL cannot use the same table
@@ -1254,8 +1254,8 @@ get_collection_id_raw(SUS, {SUser, SServer, SResource}, SUTC) ->
                         "and with_resource = ", SResource, " "
                         "and utc = ", SUTC]) of
         {selected, _, Rs} when Rs /= [] ->
-	    {ID} = lists:last(lists:sort(Rs)),
-	    decode_integer(ID);
+	    ID = lists:last(lists:sort([ R || [R] <- Rs ])),
+	    decode_integer(binary_to_lsit(ID));
         _ -> {error, ?ERR_BAD_REQUEST}
     end.
 
@@ -1347,7 +1347,7 @@ store_message(LServer, Msg) ->
 %% support this syntax
 %%
 store_messages(LServer, CID, Msgs) ->
-    case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(T) -> T end, "")) of
+    case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8); (T) -> T end, "")) of
         "sqlite" ->
 	    %% Single inserts
             lists:map(
@@ -1569,7 +1569,7 @@ combine_names_vals(Names, Vals) ->
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_last_inserted_id(LServer, Table) ->
-    case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(T) -> T end, "")) of
+    case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8); (T) -> T end, "")) of
         "mysql" -> {selected, _, [{ID}]} = run_sql_query(["select LAST_INSERT_ID()"]),
                    decode_integer(ID);
         "sqlite" -> {selected, _, [{ID}]} = run_sql_query(["select last_insert_rowid()"]),
@@ -2185,7 +2185,7 @@ expire_collections(Host) ->
     run_sql_transaction(Host, F).
 
 get_expired_str(Host, ExpExpr, UTCField) ->
-    case jlib:tolower(gen_mod:get_module_opt(Host, ?MODULE, database_type, fun(T) -> T end, "")) of
+    case jlib:tolower(gen_mod:get_module_opt(Host, ?MODULE, database_type, fun(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8); (T) -> T end, "")) of
         "mysql" -> ["timestampadd(second, ", ExpExpr, ", archive_collections.", UTCField, ")"];
         "sqlite" -> ["datetime(archive_collections.", UTCField, ", '+' || ", ExpExpr, " || ' seconds')"];
         "pgsql" -> ["timestamp archive_collections.", UTCField, " + interval ", ExpExpr, " || ' seconds'"];
@@ -2212,6 +2212,8 @@ escape(infinity) ->
     integer_to_list(?INFINITY);
 escape(Num) when is_integer(Num) ->
     integer_to_list(Num);
+escape(Bin) when is_binary(Bin) ->
+    escape(binary_to_list(Bin));
 escape(Str) ->
     "'" ++ [escape_chars(C) || C <- Str] ++ "'".
 
@@ -2221,7 +2223,7 @@ escape_str(_, null) ->
 escape_str(_, undefined) ->
     "null";
 escape_str(LServer, Str) ->
-    case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(T) -> T end, "")) of
+    case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8); (T) -> T end, "")) of
         "sqlite" -> "'" ++ [escape_chars(C) || C <- Str] ++ "'";
 	_ -> "'" ++ ejabberd_odbc:escape(Str) ++ "'"
     end.
@@ -2258,7 +2260,7 @@ timestamp_to_integer(Num) ->
     Num.
 
 get_us_escaped({LUser, LServer}) ->
-    escape(LUser ++ "@" ++ LServer).
+    escape(<<LUser/binary, "@", LServer/binary>>).
 
 get_us_separated(US) ->
     JID = jlib:string_to_jid(US),
@@ -2273,7 +2275,7 @@ get_jid_full_escaped({LUser, LServer, undefined}) ->
 get_jid_full_escaped({LUser, LServer, ""}) ->
     escape(LUser ++ "@" ++ LServer);
 get_jid_full_escaped({LUser, LServer, LResource}) ->
-    escape(LUser ++ "@" ++ LServer ++ "/" ++ LResource).
+    escape(jlib:jid_to_string(jlib:make_jid(LUser,LServer, LResource))).
 
 decode_integer(Val) when is_integer(Val) ->
     Val;
