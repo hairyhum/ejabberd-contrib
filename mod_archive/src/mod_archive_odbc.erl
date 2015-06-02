@@ -340,7 +340,7 @@ process_local_iq(From, To, #iq{sub_el = SubEl} = IQ) ->
         false ->
             IQ#iq{type = error, sub_el = [SubEl, ?ERR_NOT_ALLOWED]};
         true ->
-            {xmlelement, Name, _Attrs, _Els} = SubEl,
+            {xmlel, Name, _Attrs, _Els} = SubEl,
             F = fun() ->
 			case Name of
 			    "pref" -> process_local_iq_pref(From, To, IQ);
@@ -354,8 +354,8 @@ process_local_iq(From, To, #iq{sub_el = SubEl} = IQ) ->
 				       sub_el = [SubEl, ?ERR_FEATURE_NOT_IMPLEMENTED]}
 			end
 		end,
-	    %% All IQ processing functions should return either {result, xmlelement} or
-	    %% {error, xmlelement} - other returns mean smth is seriously wrong
+	    %% All IQ processing functions should return either {result, xmlel} or
+	    %% {error, xmlel} - other returns mean smth is seriously wrong
 	    %% with the code itself.
             case catch F() of
                 {result, R} ->
@@ -432,7 +432,7 @@ add_log(Direction, LUser, LServer, LResource, JID, Packet) ->
     end.
 
 %% Parse the message and return {Thread, Subject, Body} strings if successful
-parse_message({xmlelement, "message", _, _} = Packet) ->
+parse_message({xmlel, "message", _, _} = Packet) ->
     case xml:get_tag_attr_s("type", Packet) of
         Type when Type == "";
                   Type == "normal";
@@ -612,7 +612,7 @@ new_dict_answer({LUser, LServer, JID} = Key1, TS, Thread, Resource, Sessions) ->
 process_local_iq_pref(From, _To, #iq{type = Type, sub_el = SubEl} = IQ) ->
     Result = case Type of
 		 set ->
-		     {xmlelement, _Name, _Attrs, Els} = SubEl,
+		     {xmlel, _Name, _Attrs, Els} = SubEl,
 		     process_save_set(From#jid.luser, From#jid.lserver, Els);
 		 get ->
 		     process_save_get(From#jid.luser, From#jid.lserver)
@@ -624,7 +624,7 @@ process_local_iq_pref(From, _To, #iq{type = Type, sub_el = SubEl} = IQ) ->
         R -> R
     end.
 
-%% returns {error, xmlelement} or {result, xmlelement}
+%% returns {error, xmlel} or {result, xmlel}
 process_save_get(LUser, LServer) ->
     F =
         fun() ->
@@ -643,7 +643,7 @@ process_save_get(LUser, LServer) ->
 		       true -> "true"
 		    end,
 		DItem = global_prefs_to_xml(GPrefs, DGPrefs, UnSet),
-		{result, [{xmlelement, "pref", [{"xmlns", ?NS_ARCHIVE}], DItem ++ LItems}]}
+		{result, [{xmlel, "pref", [{"xmlns", ?NS_ARCHIVE}], DItem ++ LItems}]}
         end,
     run_sql_transaction(LServer, F).
 
@@ -651,7 +651,7 @@ jid_prefs_to_xml(Pref) ->
     Save = Pref#archive_jid_prefs.save,
     Expire = Pref#archive_jid_prefs.expire,
     OTR = Pref#archive_jid_prefs.otr,
-    {xmlelement, "item",
+    {xmlel, "item",
      [{"jid", jlib:jid_to_string(Pref#archive_jid_prefs.jid)}] ++
      if Save /= undefined ->
 	     [{"save", atom_to_list(Save)}];
@@ -680,25 +680,25 @@ global_prefs_to_xml(GPrefs, DGPrefs, UnSet) ->
 		tuple_to_list(GPrefs),
 		tuple_to_list(DGPrefs))),
     Expire = Prefs#archive_global_prefs.expire,
-    [{xmlelement, "default",
+    [{xmlel, "default",
       [{"save", atom_to_list(Prefs#archive_global_prefs.save)}] ++
       if Expire /= infinity -> [{"expire", integer_to_list(Expire)}]; true -> [] end ++
       [{"otr", atom_to_list(Prefs#archive_global_prefs.otr)},
        {"unset", UnSet}],
       []},
-     {xmlelement, "method",
+     {xmlel, "method",
       [{"type", "auto"},
        {"use", atom_to_list(Prefs#archive_global_prefs.method_auto)}],
       []},
-     {xmlelement, "method",
+     {xmlel, "method",
       [{"type", "local"},
        {"use", atom_to_list(Prefs#archive_global_prefs.method_local)}],
       []},
-     {xmlelement, "method",
+     {xmlel, "method",
       [{"type", "manual"},
        {"use", atom_to_list(Prefs#archive_global_prefs.method_manual)}],
       []},
-     {xmlelement, "auto",
+     {xmlel, "auto",
       [{"save", atom_to_list(Prefs#archive_global_prefs.auto_save)}],
       []}].
 
@@ -716,7 +716,7 @@ default_global_prefs({_, LServer} = US) ->
                           otr = forbid}.
 
 
-%% Return {error, xmlelement} or ok
+%% Return {error, xmlel} or ok
 process_save_set(LUser, LServer, Elems) ->
     F =
         fun() ->
@@ -728,12 +728,12 @@ process_save_set(LUser, LServer, Elems) ->
         end,
     run_sql_transaction(LServer, F).
 
-parse_save_elem(GPrefs, [{xmlelement, "default", Attrs, _} | Tail]) ->
+parse_save_elem(GPrefs, [{xmlel, "default", Attrs, _} | Tail]) ->
     {Save, Expire, OTR} = get_main_prefs_from_attrs(Attrs),
     GPrefs1 = GPrefs#archive_global_prefs{save = Save, expire = Expire, otr = OTR},
     parse_save_elem(GPrefs1, Tail);
 
-parse_save_elem(GPrefs, [{xmlelement, "method", Attrs, _} | Tail]) ->
+parse_save_elem(GPrefs, [{xmlel, "method", Attrs, _} | Tail]) ->
     Use =
         case xml:get_attr_s("use", Attrs) of
             "concede" -> concede;
@@ -752,7 +752,7 @@ parse_save_elem(GPrefs, [{xmlelement, "method", Attrs, _} | Tail]) ->
         end,
     parse_save_elem(GPrefs1, Tail);
 
-parse_save_elem(GPrefs, [{xmlelement, "auto", Attrs, _} | Tail]) ->
+parse_save_elem(GPrefs, [{xmlel, "auto", Attrs, _} | Tail]) ->
     GPrefs1 =
         case xml:get_attr_s("save", Attrs) of
             "true" -> GPrefs#archive_global_prefs{auto_save = true};
@@ -761,7 +761,7 @@ parse_save_elem(GPrefs, [{xmlelement, "auto", Attrs, _} | Tail]) ->
         end,
     parse_save_elem(GPrefs1, Tail);
 
-parse_save_elem(GPrefs, [{xmlelement, "item", Attrs, _}  | Tail]) ->
+parse_save_elem(GPrefs, [{xmlel, "item", Attrs, _}  | Tail]) ->
     case jlib:string_to_jid(xml:get_attr_s("jid", Attrs)) of
         error -> throw({error, ?ERR_JID_MALFORMED});
         JID ->
@@ -819,7 +819,7 @@ broadcast_iq(#jid{luser = User, lserver = Server}, IQ) ->
 process_local_iq_auto(From, _To, #iq{type = Type, sub_el = SubEl}) ->
     case Type of
         set ->
-            {xmlelement, _Name, Attrs, _Els} = SubEl,
+            {xmlel, _Name, Attrs, _Els} = SubEl,
             Auto =
                 case xml:get_attr_s("save", Attrs) of
                     "true" -> true;
@@ -929,11 +929,11 @@ process_local_iq_save(From, _To, #iq{type = Type, sub_el = SubEl}) ->
             run_sql_transaction(LServer, F)
     end.
 
-%% return a {#archive_collection, list of #archive_message} or {error, xmlelement}
+%% return a {#archive_collection, list of #archive_message} or {error, xmlel}
 parse_store_element(LUser, LServer,
-                    {xmlelement, "save", _ChatAttrs, ChatSubEls}) ->
+                    {xmlel, "save", _ChatAttrs, ChatSubEls}) ->
     case xml:remove_cdata(ChatSubEls) of
-        [{xmlelement, "chat", Attrs, SubEls} = SubEl] ->
+        [{xmlel, "chat", Attrs, SubEls} = SubEl] ->
             {LUser, LServer, Jid, Start} = link_from_argument(LUser, LServer, SubEl),
             Extra = xml:get_subtag(SubEl, "x"),
             C = #archive_collection{us = {LUser, LServer},
@@ -959,7 +959,7 @@ parse_store_element(LUser, LServer,
             throw({error, ?ERR_BAD_REQUEST})
     end.
 
-parse_store_element_sub([{xmlelement, Dir, _, _}  = E | Tail], Start)
+parse_store_element_sub([{xmlel, Dir, _, _}  = E | Tail], Start)
   when Dir == "from";
        Dir == "to";
        Dir == "note" ->
@@ -1001,13 +1001,13 @@ process_local_iq_list(From, _To, #iq{type = Type, sub_el = SubEl}) ->
         set ->
             throw({error, ?ERR_NOT_ALLOWED});
         get ->
-            {xmlelement, _, _, SubEls} = SubEl,
+            {xmlel, _, _, SubEls} = SubEl,
             RSM = parse_rsm(SubEls),
             F = fun() ->
 			{interval, Start, Stop, JID} = parse_root_argument(SubEl),
 			Req = get_combined_req(Start, Stop, RSM),
 			{ok, Items, RSM_Elem} = get_collections_links(LUser, LServer, Req, JID),
-			{result, [{xmlelement, "list",
+			{result, [{xmlel, "list",
 				   [{"xmlns", ?NS_ARCHIVE}],
 				   lists:append(
 				     lists:map(
@@ -1026,7 +1026,7 @@ process_local_iq_retrieve(From, _To, #iq{type = Type, sub_el = SubEl}) ->
         set ->
             throw({error, ?ERR_NOT_ALLOWED});
         get ->
-            {xmlelement, _, _, SubEls} = SubEl,
+            {xmlel, _, _, SubEls} = SubEl,
             RSM = parse_rsm(SubEls),
             F = fun() ->
 			Link = link_from_argument(LUser, LServer, SubEl),
@@ -1041,7 +1041,7 @@ retrieve_collection_and_msgs(Link, RSM) ->
     C = get_collection(Link),
     {ok, Items, RSM_Elem} = get_messages(C, RSM),
     {_, _, Attrs, SubEls} = collection_to_xml(C),
-    [{xmlelement, "chat", Attrs,
+    [{xmlel, "chat", Attrs,
       lists:append([SubEls,
                     lists:map(
 		      fun(M) ->
@@ -1061,7 +1061,7 @@ process_local_iq_remove(From, _To, #iq{type = Type, sub_el = SubEl}) ->
         get ->
             throw({error, ?ERR_NOT_ALLOWED});
         set ->
-            {xmlelement, _,  _, _} = SubEl,
+            {xmlel, _,  _, _} = SubEl,
             {interval, Start, Stop, Jid} = parse_root_argument(SubEl),
             process_remove_interval(LUser, LServer, LResource, Start, Stop, Jid)
     end.
@@ -1165,7 +1165,7 @@ process_local_iq_modified(From, _To, #iq{type = Type, sub_el = SubEl}) ->
         set ->
             {error, ?ERR_NOT_ALLOWED};
         get ->
-            {xmlelement, _, _, SubEls} = SubEl,
+            {xmlel, _, _, SubEls} = SubEl,
             RSM = parse_rsm(SubEls),
             F =
                 fun() ->
@@ -1179,7 +1179,7 @@ process_local_iq_modified(From, _To, #iq{type = Type, sub_el = SubEl}) ->
 				    Req = get_combined_req(Start, Stop, RSM),
 				    get_modified(LUser, LServer, Req)
 			    end,
-			{result, [{xmlelement, "modified",
+			{result, [{xmlel, "modified",
 				   [{"xmlns", ?NS_ARCHIVE}],
 				   lists:append(
 				     lists:map(
@@ -1261,7 +1261,7 @@ get_collection_id_raw(SUS, {SUser, SServer, SResource}, SUTC) ->
 %%
 %% The following functions deal with links that can be present in collections.
 %%
-get_link_as_list([{xmlelement, Tag, Attrs, _} | _], Name)
+get_link_as_list([{xmlel, Tag, Attrs, _} | _], Name)
   when Tag == Name ->
     if Attrs /= [] ->
 	    {jlib:jid_tolower(jlib:string_to_jid(xml:get_attr_s("with", Attrs))),
@@ -1730,7 +1730,7 @@ get_collection_link_from_query_result({ID, User, Server, Resource, UTC}) ->
 collection_link_to_xml(Name, {_, JID, UTC}) -> collection_link_to_xml(Name, {JID, UTC});
 
 collection_link_to_xml(Name, {JID, UTC}) ->
-    {xmlelement, Name,
+    {xmlel, Name,
      [{"with", jlib:jid_to_string(JID)},
       {"start", get_datetime_string_from_seconds(UTC)}],
      []};
@@ -1820,7 +1820,7 @@ collection_to_xml(C) ->
     NextXML = if NextLink /= [] -> [NextLink]; true -> [] end,
     ExtraNonEmpty = is_non_empty(C#archive_collection.extra),
     ExtraXML = if ExtraNonEmpty == true -> [decode_extra(C#archive_collection.extra)]; true -> [] end,
-    {xmlelement, "chat",
+    {xmlel, "chat",
      lists:append([
 		   [{"with", jlib:jid_to_string(C#archive_collection.jid)}],
 		   [{"start", get_datetime_string_from_seconds(C#archive_collection.utc)}],
@@ -1905,7 +1905,7 @@ get_messages_list(Msgs) ->
 message_to_xml(M, Start) ->
     Dir = atom_to_list(M#archive_message.direction),
     Secs = M#archive_message.utc - Start,
-    {xmlelement, Dir,
+    {xmlel, Dir,
      lists:append([
 		   if Dir == "note"; Secs < 0 ->
 			   UTCStr = get_datetime_string_from_seconds(M#archive_message.utc),
@@ -1916,7 +1916,7 @@ message_to_xml(M, Start) ->
 		      true -> []
 		   end]),
      [if Dir == "note" -> {xmlcdata, M#archive_message.body};
-	 true -> {xmlelement, "body", [], [{xmlcdata, M#archive_message.body}]}
+	 true -> {xmlel, "body", [], [{xmlcdata, M#archive_message.body}]}
       end]}.
 
 %%
@@ -2020,7 +2020,7 @@ change_to_xml(C) ->
             1 -> "removed";
             0 -> "changed"
         end,
-    {xmlelement, CHType,
+    {xmlel, CHType,
      [{"with", jlib:jid_to_string(C#archive_collection.jid)},
       {"start", get_datetime_string_from_seconds(C#archive_collection.utc)},
       {"by", jlib:jid_to_string(C#archive_collection.change_by)}], []}.
@@ -2231,7 +2231,7 @@ escape_chars(C)  -> C.
 
 %% Assume that if there are no sub-elements for "x" tag - this is
 %% extra info removal request
-encode_extra({xmlelement, "x", _, []}) ->
+encode_extra({xmlel, "x", _, []}) ->
     "";
 %% We could try to use BLOBs here, but base64 in text columns should
 %% be more porable and should be enough - it's unlikely someone
@@ -2442,7 +2442,7 @@ link_from_argument(LUser, LServer,  Elem) ->
 
 %%parse commons arguments of root elements
 
-parse_root_argument({xmlelement, _, Attrs, _}) ->
+parse_root_argument({xmlel, _, Attrs, _}) ->
     With = xml:get_attr_s("with", Attrs),
     Start = xml:get_attr_s("start", Attrs),
     End = xml:get_attr_s("end", Attrs),
@@ -2467,7 +2467,7 @@ parse_root_argument({xmlelement, _, Attrs, _}) ->
 
 parse_rsm([A | Tail]) ->
     case A of
-        {xmlelement, _,  Attrs1, _} ->
+        {xmlel, _,  Attrs1, _} ->
             case xml:get_attr_s("xmlns", Attrs1) of
                 ?MY_NS_RSM ->
                     parse_rsm(A);
@@ -2480,13 +2480,13 @@ parse_rsm([A | Tail]) ->
 parse_rsm([]) ->
     {{range, {0, undefined}, {infinity, undefined}, normal}, undefined};
 
-parse_rsm({xmlelement, "set", _, SubEls}) ->
+parse_rsm({xmlel, "set", _, SubEls}) ->
     parse_rsm_aux(SubEls, {{range, {0, undefined}, {infinity, undefined}, normal}, undefined});
 
 parse_rsm(_) ->
     throw({error, ?ERR_BAD_REQUEST}).
 
-parse_rsm_aux([{xmlelement, "max", _Attrs, Contents} | Tail], Acc) ->
+parse_rsm_aux([{xmlel, "max", _Attrs, Contents} | Tail], Acc) ->
     case catch list_to_integer(xml:get_cdata(Contents)) of
         P when is_integer(P) ->
             case Acc of
@@ -2499,7 +2499,7 @@ parse_rsm_aux([{xmlelement, "max", _Attrs, Contents} | Tail], Acc) ->
             throw({error, ?ERR_BAD_REQUEST})
     end;
 
-parse_rsm_aux([{xmlelement, "index", _Attrs, Contents} | Tail], Acc) ->
+parse_rsm_aux([{xmlel, "index", _Attrs, Contents} | Tail], Acc) ->
     case catch list_to_integer(xml:get_cdata(Contents)) of
         P when is_integer(P) ->
             case Acc of
@@ -2512,7 +2512,7 @@ parse_rsm_aux([{xmlelement, "index", _Attrs, Contents} | Tail], Acc) ->
             throw({error, ?ERR_BAD_REQUEST})
     end;
 
-parse_rsm_aux([{xmlelement, "after", _Attrs, Contents} | Tail], Acc) ->
+parse_rsm_aux([{xmlel, "after", _Attrs, Contents} | Tail], Acc) ->
     case Acc of
         {{range, {0, undefined}, {infinity, undefined}, normal}, Max} ->
             parse_rsm_aux(Tail, {{range, parse_rsm_range_item(xml:get_cdata(Contents)), {infinity, undefined}, normal}, Max});
@@ -2520,7 +2520,7 @@ parse_rsm_aux([{xmlelement, "after", _Attrs, Contents} | Tail], Acc) ->
             throw({error, ?ERR_BAD_REQUEST})
     end;
 
-parse_rsm_aux([{xmlelement, "before", _Attrs, Contents} | Tail], Acc) ->
+parse_rsm_aux([{xmlel, "before", _Attrs, Contents} | Tail], Acc) ->
     case Acc of
         {{range, {0, undefined}, {infinity, undefined}, normal}, Max} ->
             BT = case xml:get_cdata(Contents) of
@@ -2538,16 +2538,16 @@ parse_rsm_aux([], Acc) ->
     Acc.
 
 make_rsm(undefined, undefined, undefined, Changed, Count) ->
-    [{xmlelement, "set", [{"xmlns", ?MY_NS_RSM}], [
-					       {xmlelement, "changed", [], [{xmlcdata,  Changed}]},
-					       {xmlelement, "count", [], [{xmlcdata, integer_to_list(Count)}]}]}];
+    [{xmlel, "set", [{"xmlns", ?MY_NS_RSM}], [
+					       {xmlel, "changed", [], [{xmlcdata,  Changed}]},
+					       {xmlel, "count", [], [{xmlcdata, integer_to_list(Count)}]}]}];
 
 make_rsm(FirstIndex, FirstId, LastId, Changed, Count) ->
-    [{xmlelement, "set", [{"xmlns", ?MY_NS_RSM}], [
-						{xmlelement, "first", [{"index", integer_to_list(FirstIndex)}], [{xmlcdata,  FirstId}]},
-						{xmlelement, "last", [], [{xmlcdata,  LastId}]},
-						{xmlelement, "changed", [], [{xmlcdata,  Changed}]},
-						{xmlelement, "count", [], [{xmlcdata,  integer_to_list(Count)}]}]}].
+    [{xmlel, "set", [{"xmlns", ?MY_NS_RSM}], [
+						{xmlel, "first", [{"index", integer_to_list(FirstIndex)}], [{xmlcdata,  FirstId}]},
+						{xmlel, "last", [], [{xmlcdata,  LastId}]},
+						{xmlel, "changed", [], [{xmlcdata,  Changed}]},
+						{xmlel, "count", [], [{xmlcdata,  integer_to_list(Count)}]}]}].
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%
