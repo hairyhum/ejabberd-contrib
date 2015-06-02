@@ -704,8 +704,8 @@ global_prefs_to_xml(GPrefs, DGPrefs, UnSet) ->
 
 %% Returns the archive_global_prefs record filled with default values
 default_global_prefs({_, LServer} = US) ->
-    DefaultAutoSave = gen_mod:get_module_opt(LServer, ?MODULE, default_auto_save, false),
-    DefaultExpire = gen_mod:get_module_opt(LServer, ?MODULE, default_expire, infinity),
+    DefaultAutoSave = gen_mod:get_module_opt(LServer, ?MODULE, default_auto_save, fun(T) -> T end, false),
+    DefaultExpire = gen_mod:get_module_opt(LServer, ?MODULE, default_expire, fun(T) -> T end, infinity),
     #archive_global_prefs{us = US,
                           save = if DefaultAutoSave -> body; true -> false end,
                           expire = DefaultExpire,
@@ -1113,7 +1113,7 @@ process_remove_interval(LUser, LServer, LResource, Start, End, With) ->
 		     end],
 		TS = get_timestamp(),
 		LJID = jlib:jid_tolower(jlib:make_jid(LUser, LServer, LResource)),
-		case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, "")) of
+		case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(T) -> T end, "")) of
 		    %% MySQL has severe limitations for triggers: they cannot update the same table
 		    %% they're invoked for, so we have to do that here.
 		    %% However, yet another limitation is that in UPDATE MySQL cannot use the same table
@@ -1346,7 +1346,7 @@ store_message(LServer, Msg) ->
 %% support this syntax
 %%
 store_messages(LServer, CID, Msgs) ->
-    case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, "")) of
+    case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(T) -> T end, "")) of
         "sqlite" ->
 	    %% Single inserts
             lists:map(
@@ -1487,8 +1487,8 @@ escape_jid_prefs(Prefs) ->
                         Prefs#archive_jid_prefs.otr).
 
 validate_global_prefs(LServer, AutoSave, Save, Expire) ->
-    DefAutoSave = gen_mod:get_module_opt(LServer, ?MODULE, default_auto_save, false),
-    EnforceDefAutoSave = gen_mod:get_module_opt(LServer, ?MODULE, enforce_default_auto_save, false),
+    DefAutoSave = gen_mod:get_module_opt(LServer, ?MODULE, default_auto_save, fun(T) -> T end, false),
+    EnforceDefAutoSave = gen_mod:get_module_opt(LServer, ?MODULE, enforce_default_auto_save, fun(T) -> T end, false),
     %% Should we enforce our default auto save policy?
     %% User is trying to change auto_save to the option other than enforced.
     if EnforceDefAutoSave and (DefAutoSave /= AutoSave) and (AutoSave /= undefined) ->
@@ -1498,8 +1498,8 @@ validate_global_prefs(LServer, AutoSave, Save, Expire) ->
     validate_common_prefs(LServer, Save, Expire).
 
 validate_common_prefs(LServer, Save, Expire) ->
-    DefAutoSave = gen_mod:get_module_opt(LServer, ?MODULE, default_auto_save, false),
-    EnforceDefAutoSave = gen_mod:get_module_opt(LServer, ?MODULE, enforce_default_auto_save, false),
+    DefAutoSave = gen_mod:get_module_opt(LServer, ?MODULE, default_auto_save, fun(T) -> T end, false),
+    EnforceDefAutoSave = gen_mod:get_module_opt(LServer, ?MODULE, enforce_default_auto_save, fun(T) -> T end, false),
     %% Should we enforce our default auto save policy?
     if EnforceDefAutoSave and
        %% auto-save=true is enforced but user is trying to put "save" element to smth other
@@ -1508,13 +1508,13 @@ validate_common_prefs(LServer, Save, Expire) ->
 	    throw({error, ?ERR_FEATURE_NOT_IMPLEMENTED});
        true -> ok
     end,
-    EnforceMinExpire = gen_mod:get_module_opt(LServer, ?MODULE, enforce_min_expire, 0),
+    EnforceMinExpire = gen_mod:get_module_opt(LServer, ?MODULE, enforce_min_expire, fun(T) -> T end, 0),
     if (Expire /= undefined) and (Expire /= infinity) and
        ((EnforceMinExpire == infinity) or (Expire < EnforceMinExpire)) ->
 	    throw({error, ?ERR_FEATURE_NOT_IMPLEMENTED});
        true -> ok
     end,
-    EnforceMaxExpire = gen_mod:get_module_opt(LServer, ?MODULE, enforce_max_expire, infinity),
+    EnforceMaxExpire = gen_mod:get_module_opt(LServer, ?MODULE, enforce_max_expire, fun(T) -> T end, infinity),
     if (EnforceMaxExpire /= infinity) and (Expire /= undefined) and
        ((Expire == infinity) or (Expire > EnforceMaxExpire)) ->
 	    throw({error, ?ERR_FEATURE_NOT_IMPLEMENTED});
@@ -1568,7 +1568,7 @@ combine_names_vals(Names, Vals) ->
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_last_inserted_id(LServer, Table) ->
-    case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, "")) of
+    case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(T) -> T end, "")) of
         "mysql" -> {selected, _, [{ID}]} = run_sql_query(["select LAST_INSERT_ID()"]),
                    decode_integer(ID);
         "sqlite" -> {selected, _, [{ID}]} = run_sql_query(["select last_insert_rowid()"]),
@@ -2126,7 +2126,7 @@ expire_collections(Host) ->
 
     ExpiredByPrefJID = [get_expired_str(Host, "archive_jid_prefs.expire", "utc"), " < ", STS],
     ExpiredByPrefGlobal = [get_expired_str(Host, "archive_global_prefs.expire", "utc"), " < ", STS],
-    ExpiredByDefault = case gen_mod:get_module_opt(Host, ?MODULE, default_expire, infinity) of
+    ExpiredByDefault = case gen_mod:get_module_opt(Host, ?MODULE, default_expire, fun(T) -> T end, infinity) of
                            infinity -> "";
                            N -> [get_expired_str(Host, integer_to_list(N), "utc"), " < ", STS]
                        end,
@@ -2173,7 +2173,7 @@ expire_collections(Host) ->
 				  true -> ""
 			       end,
 			       ")"]),
-		case gen_mod:get_module_opt(Host, ?MODULE, replication_expire, 31536000) of
+		case gen_mod:get_module_opt(Host, ?MODULE, replication_expire, fun(T) -> T end, 31536000) of
 		    infinity -> [];
 		    N1 ->
 			run_sql_query(["delete from archive_collections "
@@ -2184,7 +2184,7 @@ expire_collections(Host) ->
     run_sql_transaction(Host, F).
 
 get_expired_str(Host, ExpExpr, UTCField) ->
-    case jlib:tolower(gen_mod:get_module_opt(Host, ?MODULE, database_type, "")) of
+    case jlib:tolower(gen_mod:get_module_opt(Host, ?MODULE, database_type, fun(T) -> T end, "")) of
         "mysql" -> ["timestampadd(second, ", ExpExpr, ", archive_collections.", UTCField, ")"];
         "sqlite" -> ["datetime(archive_collections.", UTCField, ", '+' || ", ExpExpr, " || ' seconds')"];
         "pgsql" -> ["timestamp archive_collections.", UTCField, " + interval ", ExpExpr, " || ' seconds'"];
@@ -2220,7 +2220,7 @@ escape_str(_, null) ->
 escape_str(_, undefined) ->
     "null";
 escape_str(LServer, Str) ->
-    case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, "")) of
+    case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(T) -> T end, "")) of
         "sqlite" -> "'" ++ [escape_chars(C) || C <- Str] ++ "'";
 	_ -> "'" ++ ejabberd_odbc:escape(Str) ++ "'"
     end.
@@ -2419,7 +2419,7 @@ run_sql_query(Query) ->
     end.
 
 run_sql_transaction(LServer, F) ->
-    DBHost = gen_mod:get_module_opt(LServer, ?MODULE, db_host, LServer),
+    DBHost = gen_mod:get_module_opt(LServer, ?MODULE, db_host, fun(T) -> T end, LServer),
     case ejabberd_odbc:sql_transaction(DBHost, F) of
         {atomic, R} ->
 	    %%?MYDEBUG("succeeded transaction: ~p", [R]),
