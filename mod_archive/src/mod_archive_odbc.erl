@@ -428,7 +428,6 @@ add_log(Direction, LUser, LServer, LResource, JID, Packet) ->
             gen_server:cast(
               Proc, {addlog, Type, Direction, LUser, LServer, LResource, JID, Thread, Subject, Nick, Body});
 	Parsed ->
-        ?DEBUG("Message parsed as ~p", [Parsed]),
             ok
     end.
 
@@ -1120,7 +1119,7 @@ process_remove_interval(LUser, LServer, LResource, Start, End, With) ->
 		    %% However, yet another limitation is that in UPDATE MySQL cannot use the same table
 		    %% in subquery which is being updated - so we have to cheat here, see
 		    %% http://www.xaprb.com/blog/2006/06/23/how-to-select-from-an-update-target-in-mysql/
-		    "mysql" ->
+		    <<"mysql">> ->
 			run_sql_query(
 			  ["update archive_collections "
 			   "set next_id = NULL "
@@ -1255,7 +1254,7 @@ get_collection_id_raw(SUS, {SUser, SServer, SResource}, SUTC) ->
                         "and utc = ", SUTC]) of
         {selected, _, Rs} when Rs /= [] ->
 	    ID = lists:last(lists:sort([ R || [R] <- Rs ])),
-	    decode_integer(binary_to_lsit(ID));
+	    decode_integer(binary_to_list(ID));
         _ -> {error, ?ERR_BAD_REQUEST}
     end.
 
@@ -1348,7 +1347,7 @@ store_message(LServer, Msg) ->
 %%
 store_messages(LServer, CID, Msgs) ->
     case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8); (T) -> T end, "")) of
-        "sqlite" ->
+        <<"sqlite">> ->
 	    %% Single inserts
             lists:map(
 	      fun(Msg) ->
@@ -1570,11 +1569,11 @@ combine_names_vals(Names, Vals) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_last_inserted_id(LServer, Table) ->
     case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8); (T) -> T end, "")) of
-        "mysql" -> {selected, _, [{ID}]} = run_sql_query(["select LAST_INSERT_ID()"]),
+        <<"mysql">> -> {selected, _, [[ID]]} = run_sql_query(["select LAST_INSERT_ID()"]),
                    decode_integer(ID);
-        "sqlite" -> {selected, _, [{ID}]} = run_sql_query(["select last_insert_rowid()"]),
+        <<"sqlite">> -> {selected, _, [[ID]]} = run_sql_query(["select last_insert_rowid()"]),
 		    decode_integer(ID);
-	"pgsql" -> {selected, _, [{ID}]} = run_sql_query(["select currval('",
+	<<"pgsql">> -> {selected, _, [[ID]]} = run_sql_query(["select currval('",
                                                           Table, "_id_seq')"]), decode_integer(ID);
         _ ->
             error
@@ -2186,9 +2185,9 @@ expire_collections(Host) ->
 
 get_expired_str(Host, ExpExpr, UTCField) ->
     case jlib:tolower(gen_mod:get_module_opt(Host, ?MODULE, database_type, fun(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8); (T) -> T end, "")) of
-        "mysql" -> ["timestampadd(second, ", ExpExpr, ", archive_collections.", UTCField, ")"];
-        "sqlite" -> ["datetime(archive_collections.", UTCField, ", '+' || ", ExpExpr, " || ' seconds')"];
-        "pgsql" -> ["timestamp archive_collections.", UTCField, " + interval ", ExpExpr, " || ' seconds'"];
+        <<"mysql">> -> ["timestampadd(second, ", ExpExpr, ", archive_collections.", UTCField, ")"];
+        <<"sqlite">> -> ["datetime(archive_collections.", UTCField, ", '+' || ", ExpExpr, " || ' seconds')"];
+        <<"pgsql">> -> ["timestamp archive_collections.", UTCField, " + interval ", ExpExpr, " || ' seconds'"];
         _ -> throw({error, ?ERR_INTERNAL_SERVER_ERROR})
     end.
 
@@ -2222,11 +2221,14 @@ escape_str(_, null) ->
     "null";
 escape_str(_, undefined) ->
     "null";
+escape_str(LServer, List) when is_list(List) ->
+    escape_str(LServer, list_to_binary(List));
 escape_str(LServer, Str) ->
-    case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8); (T) -> T end, "")) of
-        "sqlite" -> "'" ++ [escape_chars(C) || C <- Str] ++ "'";
-	_ -> "'" ++ ejabberd_odbc:escape(Str) ++ "'"
-    end.
+    binary_to_list(case jlib:tolower(gen_mod:get_module_opt(LServer, ?MODULE, database_type, fun(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8); (T) -> T end, "")) of
+        <<"sqlite">> -> <<"'", << <<(escape_chars(C))>> || <<C>> <= Str>>, "'">>;
+	_ -> 
+	<<"'", (ejabberd_odbc:escape(Str))/binary, "'">>
+    end).
 
 %% Characters to escape
 escape_chars($')  -> "''";
@@ -2277,6 +2279,8 @@ get_jid_full_escaped({LUser, LServer, ""}) ->
 get_jid_full_escaped({LUser, LServer, LResource}) ->
     escape(jlib:jid_to_string(jlib:make_jid(LUser,LServer, LResource))).
 
+decode_integer(Bin) when is_binary(Bin) ->
+    decode_integer(binary_to_list(Bin));
 decode_integer(Val) when is_integer(Val) ->
     Val;
 decode_integer(null) ->
